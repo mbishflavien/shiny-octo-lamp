@@ -45,6 +45,7 @@ import { trackPageView, trackCTAClick, trackSectionView } from '../lib/analytics
 import { Language, ProjectItem, SkillItem, AwardItem } from '../types/portfolio';
 import { TRANSLATIONS } from '../data/translations';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { CustomCursor } from './CustomCursor';
 
 // --- Constants & Assets ---
 const HERO_BACKGROUNDS = [
@@ -370,6 +371,7 @@ export default function Portfolio() {
       <React.Suspense fallback={<FastCSSBackground isDarkMode={isDarkMode} />}>
         <Background3D mouseX={mouseX} mouseY={mouseY} isDarkMode={isDarkMode} />
       </React.Suspense>
+      <CustomCursor />
       
       {/* Navbar */}
       <motion.nav 
@@ -757,6 +759,7 @@ export default function Portfolio() {
               >
                 <Card 
                   onClick={() => setSelectedProjectId(project.id)}
+                  data-cursor="OPEN"
                   className={cn(
                     "project-card group overflow-hidden rounded-3xl border border-primary/10 hover:border-primary/30 shadow-md hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 bg-card/60 backdrop-blur-sm relative cursor-pointer flex flex-col h-full",
                     "before:absolute before:inset-0 before:bg-gradient-to-br before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-500",
