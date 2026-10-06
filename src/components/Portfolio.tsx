@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useScroll, useTransform, useSpring, useMotionValueEvent } from 'motion/react';
+import { MotionConfig, motion, AnimatePresence, useScroll, useTransform, useSpring, useMotionValueEvent } from 'motion/react';
 import { 
   Github, 
   Linkedin, 
@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 import { FastCSSBackground } from './FastCSSBackground';
+import { getBackgroundProfile, subscribeToBackgroundProfile } from './backgroundProfile';
 const Background3D = React.lazy(() => import('./Background3D'));
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
@@ -154,6 +155,7 @@ const SectionHeading = ({ children, subtitle }: { children: React.ReactNode, sub
 
 export default function Portfolio() {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [backgroundProfile, setBackgroundProfile] = useState(getBackgroundProfile);
   
   // Persistent language state with navigator fallback
   const [language, setLanguage] = useState<Language>(() => {
@@ -215,6 +217,10 @@ export default function Portfolio() {
     document.documentElement.lang = language;
   }, [language]);
 
+  useEffect(() => {
+    return subscribeToBackgroundProfile(() => setBackgroundProfile(getBackgroundProfile()));
+  }, []);
+
   const mouseX = useSpring(0, { stiffness: 50, damping: 20 });
   const mouseY = useSpring(0, { stiffness: 50, damping: 20 });
 
@@ -224,18 +230,38 @@ export default function Portfolio() {
 
   useEffect(() => {
     let rafId: number | null = null;
-    const handleMouseMove = (e: MouseEvent) => {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => {
-        mouseX.set(e.clientX);
-        mouseY.set(e.clientY);
-        rafId = null;
-      });
+    let pointerX = window.innerWidth / 2;
+    let pointerY = window.innerHeight / 2;
+    mouseX.set(pointerX);
+    mouseY.set(pointerY);
+
+    const commitPointer = () => {
+      mouseX.set(pointerX);
+      mouseY.set(pointerY);
+      rafId = null;
     };
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    const handlePointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(commitPointer);
+    };
+    const resetTouchPointer = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      pointerX = window.innerWidth / 2;
+      pointerY = window.innerHeight / 2;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(commitPointer);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', resetTouchPointer, { passive: true });
+    window.addEventListener('pointercancel', resetTouchPointer, { passive: true });
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', resetTouchPointer);
+      window.removeEventListener('pointercancel', resetTouchPointer);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [mouseX, mouseY]);
 
@@ -272,7 +298,8 @@ export default function Portfolio() {
     return () => unsubscribe();
   }, []);
 
-  const { scrollY } = useScroll();
+  const { scrollY, scrollYProgress } = useScroll();
+  const smoothScrollProgress = useSpring(scrollYProgress, { stiffness: 120, damping: 30, restDelta: 0.001 });
   const [hidden, setHidden] = useState(false);
 
   useMotionValueEvent(scrollY, "change", (latest) => {
@@ -367,10 +394,21 @@ export default function Portfolio() {
   const heroTitleAccent = heroTitleParts.slice(1).join(' & ');
 
   return (
-    <div className="portfolio-root min-h-screen bg-transparent text-foreground selection:bg-primary/30 selection:text-primary transition-colors duration-500">
-      <React.Suspense fallback={<FastCSSBackground isDarkMode={isDarkMode} />}>
-        <Background3D mouseX={mouseX} mouseY={mouseY} isDarkMode={isDarkMode} />
-      </React.Suspense>
+    <MotionConfig reducedMotion="user">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+      className="portfolio-root min-h-screen bg-transparent text-foreground selection:bg-primary/30 selection:text-primary transition-colors duration-500"
+    >
+      <motion.div className="scroll-progress" style={{ scaleX: smoothScrollProgress }} aria-hidden="true" />
+      {backgroundProfile.useCSSFallback ? (
+        <FastCSSBackground isDarkMode={isDarkMode} />
+      ) : (
+        <React.Suspense fallback={<FastCSSBackground isDarkMode={isDarkMode} />}>
+          <Background3D mouseX={mouseX} mouseY={mouseY} isDarkMode={isDarkMode} profile={backgroundProfile} />
+        </React.Suspense>
+      )}
       <CustomCursor />
       
       {/* Navbar */}
@@ -1487,7 +1525,8 @@ export default function Portfolio() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
+    </MotionConfig>
   );
 }
 
